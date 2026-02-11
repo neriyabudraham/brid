@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  bridal-app:
+    build: .
+    container_name: bridal_scheduler
+    restart: always
+    ports:
+      - "3050:80"
+    volumes:
+      - ./data:/app/data

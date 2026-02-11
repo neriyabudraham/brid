@@ -1,0 +1,6 @@
+.env
+*.log
+node_modules/
+dist/
+# התעלמות מהמידע שנשמר בדוקר
+data/
