@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format, addMonths, subMonths, isBefore, startOfMonth, startOfDay, parse } from 'date-fns';
 import { he } from 'date-fns/locale';
 import { ChevronRight, ChevronLeft, CalendarX, Settings, Phone, X, User, Mail, Trash2, Edit2, Clock, Plus, AlertTriangle, CheckCircle2, MapPin, XCircle, ArrowRightLeft, Save, Eraser, Info } from 'lucide-react';
-import { base44 } from './api/base44Client';
+import { bridApi } from './api/bridApi';
 
 import HeroSection from './components/HeroSection';
 import CalendarGrid from './components/CalendarGrid';
@@ -122,8 +122,8 @@ export default function App() {
   const fetchData = async () => {
     try {
       const [fetchedSlots, fetchedSettings] = await Promise.all([
-        base44.entities.BookingSlot.list(),
-        base44.entities.AppSettings.list()
+        bridApi.entities.BookingSlot.list(),
+        bridApi.entities.AppSettings.list()
       ]);
       setSlots(fetchedSlots.filter(s => isAdmin ? true : s.is_active !== false));
       if (fetchedSettings?.[0]) setSettings({...defaultSettings, ...fetchedSettings[0]});
@@ -141,12 +141,22 @@ export default function App() {
     let i = Math.max(...daySlots.map(s => s.time_order || 0), -1) + 1;
 
     let count = 0;
+    let skipped = 0;
     while (current < end) {
         const next = addMinutes(current, 60);
-        if (next > end && current < end) break; 
+        if (next > end && current < end) break;
         if (current >= end) break;
-        await base44.entities.BookingSlot.create({
-            date: dateStr, time: `${current}-${next}`, location: loc, is_active: 1, is_booked: 0, time_order: i
+        const timeStr = `${current}-${next}`;
+        // בדיקת כפילויות - אם כבר קיים תור באותו תאריך, שעה ומיקום
+        const exists = slots.find(s => s.date === dateStr && s.time === timeStr && s.location === loc);
+        if (exists) {
+            skipped++;
+            current = next;
+            i++;
+            continue;
+        }
+        await bridApi.entities.BookingSlot.create({
+            date: dateStr, time: timeStr, location: loc, is_active: 1, is_booked: 0, time_order: i
         });
         current = next;
         i++;
@@ -154,7 +164,7 @@ export default function App() {
     }
     fetchData();
     setAdminDate(null);
-    showToast(`נוצרו ${count} תורים חדשים בהצלחה`);
+    showToast(skipped > 0 ? `נוצרו ${count} תורים חדשים (${skipped} כפילויות דולגו)` : `נוצרו ${count} תורים חדשים בהצלחה`);
   };
 
   const openEditSlot = (slot) => {
@@ -166,7 +176,7 @@ export default function App() {
   const checkConflictAndSave = async () => {
       if (!editingSlot) return;
       const newTime = `${editForm.start}-${editForm.end}`;
-      await base44.entities.BookingSlot.update(editingSlot.id, { ...editingSlot, time: newTime });
+      await bridApi.entities.BookingSlot.update(editingSlot.id, { ...editingSlot, time: newTime });
       setEditingSlot(null);
       fetchData();
       showToast('השעות עודכנו בהצלחה');
@@ -188,7 +198,7 @@ export default function App() {
       const bookedData = { ...form, date: bookingSlot.date, time: bookingSlot.time, location: fullAddress, id: bookingSlot.id };
       
       try {
-          await base44.entities.BookingSlot.update(bookingSlot.id, {...bookingSlot, is_booked: true, ...form});
+          await bridApi.entities.BookingSlot.update(bookingSlot.id, {...bookingSlot, is_booked: true, ...form});
           if (settings.webhook_url) {
             fetch(settings.webhook_url, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -210,7 +220,7 @@ export default function App() {
           confirmText: "כן, בטלי פגישה",
           isDestructive: true,
           onConfirm: async () => {
-              await base44.entities.BookingSlot.update(bookingSuccess.id, { is_booked: false, bride_name: null, bride_phone: null, bride_email: null });
+              await bridApi.entities.BookingSlot.update(bookingSuccess.id, { is_booked: false, bride_name: null, bride_phone: null, bride_email: null });
               setBookingSuccess(false);
               fetchData();
               showToast("הפגישה בוטלה בהצלחה");
@@ -222,7 +232,7 @@ export default function App() {
   const handleUpdateClientDetails = async () => {
       if (!managingSlot) return;
       try {
-          await base44.entities.BookingSlot.update(managingSlot.id, {
+          await bridApi.entities.BookingSlot.update(managingSlot.id, {
               ...managingSlot,
               bride_name: clientEditForm.name,
               bride_phone: clientEditForm.phone,
@@ -249,7 +259,7 @@ export default function App() {
           isDestructive: true,
           onConfirm: async () => {
               try {
-                  await base44.entities.BookingSlot.update(managingSlot.id, {
+                  await bridApi.entities.BookingSlot.update(managingSlot.id, {
                       ...managingSlot,
                       is_booked: false,
                       bride_name: null,
@@ -274,7 +284,7 @@ export default function App() {
           isDestructive: true,
           onConfirm: async () => {
               try {
-                  await base44.entities.BookingSlot.delete(managingSlot.id);
+                  await bridApi.entities.BookingSlot.delete(managingSlot.id);
                   showToast("התור נמחק");
                   setManagingSlot(null);
                   fetchData();
@@ -296,7 +306,7 @@ export default function App() {
               const endTime = addMinutes(moveForm.time, 60);
               const fullTime = `${moveForm.time}-${endTime}`;
               try {
-                  await base44.entities.BookingSlot.update(managingSlot.id, {
+                  await bridApi.entities.BookingSlot.update(managingSlot.id, {
                       ...managingSlot,
                       date: dateStr,
                       time: fullTime,
@@ -437,6 +447,11 @@ export default function App() {
                                                             {isAdmin && <span className="text-xs text-gray-500">{formatPhoneDisplay(slot.bride_phone)}</span>}
                                                         </div>
                                                     ) : <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded-md w-fit font-medium">פנוי להרשמה</span>}
+                                                    {slot.location && (() => {
+                                                        const cityObj = settings.city_list?.find(c => c.name === slot.location);
+                                                        const addr = cityObj ? cityObj.address : slot.location;
+                                                        return <span className="text-xs text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3"/>{addr}</span>;
+                                                    })()}
                                                 </>
                                             )}
                                         </div>
@@ -454,7 +469,7 @@ export default function App() {
             )}
         </AnimatePresence>
 
-        {showAdmin && <AdminPanel settings={settings} onClose={() => setShowAdmin(false)} onSave={(s) => {base44.entities.AppSettings.create(s).then(()=>{setSettings(s); setShowAdmin(false); showToast("הגדרות נשמרו")})}} />}
+        {showAdmin && <AdminPanel settings={settings} onClose={() => setShowAdmin(false)} onSave={(s) => {bridApi.entities.AppSettings.create(s).then(()=>{setSettings(s); setShowAdmin(false); showToast("הגדרות נשמרו")})}} />}
         
         {/* Modal: ניהול לקוחה קיימת */}
         {managingSlot && (

@@ -208,7 +208,17 @@ app.post('/api/ai/chat', async (req, res) => {
 });
 
 app.get('/api/slots', (req, res) => { const stmt = db.prepare('SELECT * FROM slots'); const slots = stmt.all().map(s => ({...s, is_booked: !!s.is_booked, is_active: !!s.is_active})); res.json(slots); });
-app.post('/api/slots', (req, res) => { const { date, time, location, time_order } = req.body; const stmt = db.prepare('INSERT INTO slots (date, time, location, time_order, is_active, is_booked) VALUES (?, ?, ?, ?, 1, 0)'); const info = stmt.run(date, time, location, time_order); res.json({ id: info.lastInsertRowid }); });
+app.post('/api/slots', (req, res) => {
+    const { date, time, location, time_order } = req.body;
+    // בדיקת כפילויות - אם כבר קיים תור באותו תאריך, שעה ומיקום
+    const existing = db.prepare('SELECT id FROM slots WHERE date = ? AND time = ? AND location = ? AND is_active = 1').get(date, time, location);
+    if (existing) {
+        return res.json({ id: existing.id, duplicate: true });
+    }
+    const stmt = db.prepare('INSERT INTO slots (date, time, location, time_order, is_active, is_booked) VALUES (?, ?, ?, ?, 1, 0)');
+    const info = stmt.run(date, time, location, time_order);
+    res.json({ id: info.lastInsertRowid });
+});
 
 // *** התיקון החשוב ביותר כאן ***
 app.put('/api/slots/:id', (req, res) => { 

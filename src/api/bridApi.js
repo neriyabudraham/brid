@@ -1,4 +1,4 @@
-export const base44 = {
+export const bridApi = {
   entities: {
     BookingSlot: {
       list: async () => {
@@ -41,7 +41,7 @@ export const base44 = {
         return res.json();
       },
       update: async (id, data) => {
-         return base44.entities.AppSettings.create(data);
+         return bridApi.entities.AppSettings.create(data);
       }
     }
   }
