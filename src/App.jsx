@@ -447,11 +447,7 @@ export default function App() {
                                                             {isAdmin && <span className="text-xs text-gray-500">{formatPhoneDisplay(slot.bride_phone)}</span>}
                                                         </div>
                                                     ) : <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded-md w-fit font-medium">פנוי להרשמה</span>}
-                                                    {slot.location && (() => {
-                                                        const cityObj = settings.city_list?.find(c => c.name === slot.location);
-                                                        const addr = cityObj ? cityObj.address : slot.location;
-                                                        return <span className="text-xs text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3"/>{addr}</span>;
-                                                    })()}
+                                                    {slot.location && <span className="text-xs text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3"/>{slot.location}</span>}
                                                 </>
                                             )}
                                         </div>
